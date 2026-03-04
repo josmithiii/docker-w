@@ -116,6 +116,12 @@ These disappear when the container exits -- useful for one-off experiments.
 **Rule of thumb:** packages you always want go in the Dockerfile;
 everything else can be installed at runtime as needed.
 
+## References
+
+- [Colima](https://oneuptime.com/blog/post/2026-02-08-how-to-choose-between-colima-and-docker-desktop-on-macos/view)
+  - [code](https://github.com/abiosoft/colima)
+  - [intro](https://www.oreateai.com/blog/colima-vs-docker-choosing-the-right-container-solution-for-developers/350a0497d0434d13e33a70f3487404e9)
+
 ## LaTeX build notes
 
 The entrypoint auto-switches `Makefile.lecture` symlinks from `-macosx`
