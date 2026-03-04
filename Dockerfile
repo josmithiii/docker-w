@@ -1,5 +1,5 @@
 # Claude Code + LaTeX development environment
-# Build:  docker build -t claude-latex /w/docker-w/
+# Build:  docker build -t claude-w /w/docker-w/
 # Run:    /w/docker-w/run.sh
 
 FROM node:20-bookworm

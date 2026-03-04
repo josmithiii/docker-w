@@ -1,4 +1,4 @@
-IMAGE = claude-latex
+IMAGE = claude-w
 
 .PHONY: help build rebuild run clean status
 

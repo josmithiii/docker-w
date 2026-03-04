@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMAGE_NAME="claude-latex"
+IMAGE_NAME="claude-w"
 SSD="/Volumes/Samsung-990-Pro-4TB-2025/w"
 
 # Build image if it doesn't exist

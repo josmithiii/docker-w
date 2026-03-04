@@ -11,7 +11,7 @@ from macOS Keychain at runtime -- no API key needed).
 
 ```bash
 # Build the image (first time only, ~10 min for TeX Live)
-docker build -t claude-latex /w/docker-w/
+docker build -t claude-w /w/docker-w/
 
 # Interactive session, starting in ~/w
 /w/docker-w/run.sh
@@ -99,7 +99,7 @@ Fallback: set `ANTHROPIC_API_KEY` in your environment to use an API key instead.
 **Pre-installed (persistent):** add to the `apt-get install` list in `Dockerfile`, then rebuild:
 
 ```bash
-docker build -t claude-latex /w/docker-w/
+docker build -t claude-w /w/docker-w/
 ```
 
 Docker caches unchanged layers, so rebuilds only re-run from the changed line onward.
