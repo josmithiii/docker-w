@@ -24,14 +24,43 @@ docker build -t claude-latex /w/docker-w/
 /w/docker-w/run.sh -p "build the Intro420 lecture"
 ```
 
+## Prerequisites
+
+**Colima** (Docker VM for macOS) with `vz`/`virtiofs` and the SSD mount:
+
+```bash
+brew install colima
+```
+
+Edit `~/.colima/default/colima.yaml`:
+
+```yaml
+vmType: vz
+mountType: virtiofs
+mounts:
+  - location: /Volumes/Samsung-990-Pro-4TB-2025/w
+    writable: true
+  - location: /Users/jos
+    writable: true
+```
+
+Then `colima start`. The two mount paths must not overlap (mount the SSD
+subdirectory `.../w`, not the whole volume).
+
+**Samsung SSD** must be plugged in. Rsync what you need before starting:
+
+```bash
+rsync -a ~/w/pasp/ /Volumes/Samsung-990-Pro-4TB-2025/w/pasp/
+```
+
 ## Container mounts
 
-| Container path | Host source | Contents |
-|----------------|-------------|----------|
-| `/w` | `~/w` | All git working copies (read-write) |
-| `/ssd` | Samsung SSD `.../w` | rsync'd copies + large data files (read-write, mounted only if SSD is plugged in) |
-| `/home/claude/.claude` | `~/.claude` | Claude Code settings, memory, history |
-| `/home/claude/.claude.json` | `~/.claude.json` | Claude Code config/state |
+| Container path | Host source | Mode | Contents |
+|----------------|-------------|------|----------|
+| `/w` | Samsung SSD `.../w` | read-write | rsync'd working copies (the working area) |
+| `/w-main` | `~/w` | **read-only** | Original git working copies (reference) |
+| `/home/claude/.claude` | `~/.claude` | read-write | Claude Code settings, memory, history |
+| `/home/claude/.claude.json` | `~/.claude.json` | read-write | Claude Code config/state |
 
 Symlinked host paths (e.g. `/l/l420` -> `~/w/lectures420`) are resolved
 automatically and mapped into `/w/...` inside the container.
@@ -43,16 +72,14 @@ automatically and mapped into `/w/...` inside the container.
 - If it runs `rm -rf /`, only container internals are destroyed
 
 **What's exposed (read-write):**
-- `/w` -- untracked files (build outputs, temp files) could be deleted; git-tracked files are recoverable
-- `/ssd` -- same risk as `/w`
+- `/w` (SSD) -- untracked files could be deleted, but these are rsync'd copies; originals in `~/w` are safe (mounted read-only as `/w-main`)
 - `~/.claude`, `~/.claude.json` -- conversation history, settings could be corrupted
 
 **Network:** unrestricted. Could `git push` (HTTPS only -- no SSH keys mounted) or curl arbitrary URLs.
 
 **Mitigations:**
 - Mount `~/.claude` read-only: add `:ro` to the volume flags in `run.sh`
-- Rsync projects to the SSD and work on the copy (`--workdir /ssd/pasp`)
-- `git stash --include-untracked` before a session to protect untracked files
+- `~/w` is already read-only; the SSD copy is expendable (re-rsync to restore)
 
 ## Authentication
 

@@ -9,8 +9,8 @@
 #   /w/docker-w/run.sh -p "build Intro420"     # non-interactive single prompt
 #
 # Mounts:
-#   /w      — ~/w (git working copies, read-write)
-#   /ssd    — Samsung SSD /w (rsync'd copies + large data files, read-write)
+#   /w        — Samsung SSD /w (rsync'd working copies, read-write)
+#   /w-main   — ~/w (original git working copies, read-only reference)
 
 set -euo pipefail
 
@@ -49,6 +49,13 @@ W_REAL=$(resolve_path "$HOME/w")
 CLAUDE_DIR_REAL=$(resolve_path "$HOME/.claude")
 CLAUDE_JSON_REAL=$(resolve_path "$HOME/.claude.json")
 
+# Require SSD
+if [ ! -d "$SSD" ]; then
+    echo "Error: SSD not mounted at $SSD"
+    echo "Plug in the Samsung SSD and retry."
+    exit 1
+fi
+
 # Default working directory inside container
 WORKDIR="/w"
 
@@ -75,17 +82,15 @@ if [[ "$WORKDIR_REAL" == "$W_REAL"* ]]; then
 fi
 
 # Build docker run args
+#   /w      = SSD (rsync'd copies — the working area)
+#   /w-main = ~/w (read-only reference)
 DOCKER_ARGS=(
     -it --rm
-    -v "$W_REAL:/w"
+    -v "$SSD:/w"
+    -v "$W_REAL:/w-main:ro"
     -v "$CLAUDE_DIR_REAL:/home/claude/.claude"
     -v "$CLAUDE_JSON_REAL:/home/claude/.claude.json"
 )
-
-# Mount SSD if available (large data files, rsync'd working copies)
-if [ -d "$SSD" ]; then
-    DOCKER_ARGS+=(-v "$SSD:/ssd")
-fi
 
 # Pass OAuth token from Keychain
 if [ -n "$OAUTH_TOKEN" ]; then
