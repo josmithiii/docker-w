@@ -35,6 +35,8 @@ brew install colima
 Edit `~/.colima/default/colima.yaml`:
 
 ```yaml
+cpu: 4
+memory: 8
 vmType: vz
 mountType: virtiofs
 mounts:
@@ -44,8 +46,10 @@ mounts:
     writable: true
 ```
 
-Then `colima start`. The two mount paths must not overlap (mount the SSD
-subdirectory `.../w`, not the whole volume).
+Then `colima start`. Notes:
+- `vz` + `virtiofs` gives near-native I/O (the default `qemu` + `sshfs` hangs on volume mounts)
+- The two mount paths must not overlap (mount `.../w`, not the whole SSD volume)
+- 8GB RAM avoids OOM during large LaTeX builds
 
 **Samsung SSD** must be plugged in. Rsync what you need before starting:
 
@@ -61,6 +65,7 @@ rsync -a ~/w/pasp/ /Volumes/Samsung-990-Pro-4TB-2025/w/pasp/
 | `/w-main` | `~/w` | **read-only** | Original git working copies (reference) |
 | `/home/claude/.claude` | `~/.claude` | read-write | Claude Code settings, memory, history |
 | `/home/claude/.claude.json` | `~/.claude.json` | read-write | Claude Code config/state |
+| `/home/claude/.gitconfig` | `~/.gitconfig` | **read-only** | Git user.name/email for commits |
 
 Symlinked host paths (e.g. `/l/l420` -> `~/w/lectures420`) are resolved
 automatically and mapped into `/w/...` inside the container.

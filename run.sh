@@ -90,6 +90,7 @@ DOCKER_ARGS=(
     -v "$W_REAL:/w-main:ro"
     -v "$CLAUDE_DIR_REAL:/home/claude/.claude"
     -v "$CLAUDE_JSON_REAL:/home/claude/.claude.json"
+    -v "$HOME/.gitconfig:/home/claude/.gitconfig:ro"
 )
 
 # Pass OAuth token from Keychain
