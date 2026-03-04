@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     transfig \
     latex2html \
     # Utilities
+    sudo \
     git \
     curl \
     jq \
@@ -36,7 +37,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ============================================================================
 # Non-root user (required by --dangerously-skip-permissions)
 # ============================================================================
-RUN useradd -m -s /bin/bash claude
+RUN useradd -m -s /bin/bash claude \
+    && echo "claude ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 RUN mkdir -p /w /ssd && chown claude:claude /w /ssd
 
 # ============================================================================

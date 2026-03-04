@@ -1,69 +1,94 @@
-2026-03-04
+# docker-w
 
-Claude Code sessions:
-    53886a2c-fa39-469a-b977-3cf0663bb543
-    68e5be2d-d75f-4df0-be62-adf4dbb1c701
+Docker environment for running [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+with `--dangerously-skip-permissions` (no interactive approval prompts).
+Includes a full TeX Live installation for building LaTeX projects.
 
-> ... suppose instead of /l/l420 I want to work on /w/pasp/ - what is the procedure?
+Authenticates via your **Claude Max subscription** (OAuth token extracted
+from macOS Keychain at runtime -- no API key needed).
 
-⏺ ./docker/run.sh --workdir /w/pasp
+## Quick start
 
-> How "sandboxed" is [the docker container]? ... I'm not worried about git-tracked directories, but what else could go wrong if anything?
+```bash
+# Build the image (first time only, ~10 min for TeX Live)
+docker build -t claude-latex /w/docker-w/
 
-⏺ Good question. Here's the realistic threat model:
+# Interactive session, starting in ~/w
+/w/docker-w/run.sh
 
-  What's safe (contained by Docker)
+# Start in a specific project
+/w/docker-w/run.sh --workdir /w/pasp
+/w/docker-w/run.sh --workdir /l/l420    # symlinks resolved automatically
 
-  - Can't touch your home directory, system files, or anything outside the mounted volumes
-  - Can't access other projects, SSH keys, browser cookies, etc.
-  - If it runs rm -rf /, only container internals are destroyed
+# Non-interactive single prompt
+/w/docker-w/run.sh -p "build the Intro420 lecture"
+```
 
-  What's exposed (read-write mounts)
+## Container mounts
 
-  ┌──────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │        Mount         │                                                     Risk                                                      │
-  ├──────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ /l/l420              │ Untracked files (build outputs, temp files, local notes) could be deleted. Git-tracked files are recoverable. │
-  ├──────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ /workspace/jos-latex │ Same -- untracked files at risk.                                                                               │
-  ├──────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ ~/.claude            │ Your full conversation history, memory, plugins, hooks, project settings. Could be corrupted or wiped.        │
-  ├──────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-  │ ~/.claude.json       │ 190KB of Claude Code settings/state. Could be modified.                                                       │
-  └──────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+| Container path | Host source | Contents |
+|----------------|-------------|----------|
+| `/w` | `~/w` | All git working copies (read-write) |
+| `/ssd` | Samsung SSD `.../w` | rsync'd copies + large data files (read-write, mounted only if SSD is plugged in) |
+| `/home/claude/.claude` | `~/.claude` | Claude Code settings, memory, history |
+| `/home/claude/.claude.json` | `~/.claude.json` | Claude Code config/state |
 
-  Network
+Symlinked host paths (e.g. `/l/l420` -> `~/w/lectures420`) are resolved
+automatically and mapped into `/w/...` inside the container.
 
-  The container has unrestricted network access. Claude Code could:
-  - git push (though SSH keys aren't mounted, so only HTTPS with cached creds)
-  - Curl arbitrary URLs
-  - Send data anywhere
+## Sandboxing
 
-  The official devcontainer reference includes a firewall script for this reason, but we didn't add one.
+**What's contained:**
+- Can't access your home directory, SSH keys, browser data, or anything outside the mounts
+- If it runs `rm -rf /`, only container internals are destroyed
 
-  Practical recommendations
+**What's exposed (read-write):**
+- `/w` -- untracked files (build outputs, temp files) could be deleted; git-tracked files are recoverable
+- `/ssd` -- same risk as `/w`
+- `~/.claude`, `~/.claude.json` -- conversation history, settings could be corrupted
 
-  1. Mount .claude read-only if you only need Claude to work on LaTeX (it won't be able to save memory/history, but that's fine for a sandboxed session):
+**Network:** unrestricted. Could `git push` (HTTPS only -- no SSH keys mounted) or curl arbitrary URLs.
 
-  -v "$CLAUDE_DIR_REAL:/home/claude/.claude:ro"
-  -v "$CLAUDE_JSON_REAL:/home/claude/.claude.json:ro"
+**Mitigations:**
+- Mount `~/.claude` read-only: add `:ro` to the volume flags in `run.sh`
+- Rsync projects to the SSD and work on the copy (`--workdir /ssd/pasp`)
+- `git stash --include-untracked` before a session to protect untracked files
 
-  2. Restrict network if you want tighter sandboxing:
+## Authentication
 
-  docker run --network=none ...   # no network at all (won't work -- needs API)
+`run.sh` extracts the OAuth access token from your macOS Keychain
+(`Claude Code-credentials`) and passes it via the `CLAUDE_CODE_OAUTH_TOKEN`
+environment variable. No secrets are stored in these files.
 
-  Or allow only the Claude API:
-  # In run.sh, add:
-  --add-host=host.docker.internal:host-gateway
-  (Full firewall requires iptables in the entrypoint -- the official init-firewall.sh does this.)
+Fallback: set `ANTHROPIC_API_KEY` in your environment to use an API key instead.
 
-  3. The real risk: untracked files in /l/l420 that aren't in git. If
-     you have any precious untracked work there, a rogue make tclean
-     or rm could destroy it. You could mitigate with a snapshot:
+## Adding packages
 
-  cd /l/l420 && git stash --include-untracked   # before Docker session
+**Pre-installed (persistent):** add to the `apt-get install` list in `Dockerfile`, then rebuild:
 
-  Bottom line: For your use case (editing LaTeX, building PDFs), the
-  main practical risk is accidental deletion of untracked files in the
-  two mounted project directories. Everything else on your system is
-  invisible to the container.
+```bash
+docker build -t claude-latex /w/docker-w/
+```
+
+Docker caches unchanged layers, so rebuilds only re-run from the changed line onward.
+
+**At runtime (ephemeral):** the Dockerfile grants the `claude` user passwordless
+sudo, so Claude Code (or you via its shell) can install packages during a session:
+
+```
+sudo apt-get update && sudo apt-get install -y ffmpeg
+```
+
+These disappear when the container exits -- useful for one-off experiments.
+
+**Rule of thumb:** packages you always want go in the Dockerfile;
+everything else can be installed at runtime as needed.
+
+## LaTeX build notes
+
+The entrypoint auto-switches `Makefile.lecture` symlinks from `-macosx`
+to `-linux` when detected, so `make pdf` etc. work inside the container.
+
+Included TeX/build packages: texlive-latex-{base,recommended,extra},
+texlive-{fonts-recommended,fonts-extra,science,pictures}, ghostscript,
+netpbm, psutils, transfig, latex2html.
