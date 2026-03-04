@@ -1,4 +1,8 @@
-2026-03-04 - CCO session: 53886a2c-fa39-469a-b977-3cf0663bb543
+2026-03-04
+
+Claude Code sessions:
+    53886a2c-fa39-469a-b977-3cf0663bb543
+    68e5be2d-d75f-4df0-be62-adf4dbb1c701
 
 > ... suppose instead of /l/l420 I want to work on /w/pasp/ - what is the procedure?
 
