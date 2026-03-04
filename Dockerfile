@@ -5,10 +5,9 @@
 FROM node:20-bookworm
 
 # ============================================================================
-# System packages
+# LaTeX (large, slow-changing — cached as its own layer)
 # ============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # LaTeX core
     texlive-latex-base \
     texlive-latex-recommended \
     texlive-latex-extra \
@@ -16,14 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-fonts-extra \
     texlive-science \
     texlive-pictures \
-    # Build tools
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
+# Build tools and utilities (add new packages here to avoid TeX Live rebuild)
+# ============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     ghostscript \
     netpbm \
     psutils \
     transfig \
     latex2html \
-    # Utilities
     sudo \
     git \
     curl \
