@@ -38,6 +38,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================================================
+# C++ build tools and JUCE Linux dependencies
+# ============================================================================
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cmake \
+    ninja-build \
+    clang \
+    libc++-dev \
+    libc++abi-dev \
+    g++ \
+    pkg-config \
+    libasound2-dev \
+    libjack-jackd2-dev \
+    libfreetype-dev \
+    libx11-dev \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libxcomposite-dev \
+    libgl-dev \
+    libcurl4-openssl-dev \
+    libwebkit2gtk-4.1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================================
 # Non-root user (required by --dangerously-skip-permissions)
 # ============================================================================
 RUN useradd -m -s /bin/bash claude \
