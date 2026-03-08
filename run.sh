@@ -11,6 +11,7 @@
 # Mounts:
 #   /w        — Samsung SSD /w (rsync'd working copies, read-write)
 #   /w-main   — ~/w (original git working copies, read-only reference)
+#   ~/.ssh    — SSH keys (read-only, for git push/pull)
 
 set -euo pipefail
 
@@ -91,6 +92,7 @@ DOCKER_ARGS=(
     -v "$CLAUDE_DIR_REAL:/home/claude/.claude"
     -v "$CLAUDE_JSON_REAL:/home/claude/.claude.json"
     -v "$HOME/.gitconfig:/home/claude/.gitconfig:ro"
+    -v "$HOME/.ssh:/home/claude/.ssh:ro"
 )
 
 # Pass OAuth token from Keychain
