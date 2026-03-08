@@ -124,13 +124,30 @@ DOCKER_ARGS+=(-w "$WORKDIR")
 # ---------------------------------------------------------------------------
 SOCAT_MAC_PID=""
 SOCAT_COLIMA_SSH_PID=""
+NOTIFY_WATCHER_PID=""
 
-cleanup_x11() {
+cleanup() {
+    [ -n "$NOTIFY_WATCHER_PID" ] && kill "$NOTIFY_WATCHER_PID" 2>/dev/null || true
     [ -n "$SOCAT_MAC_PID" ] && kill "$SOCAT_MAC_PID" 2>/dev/null || true
     # Killing the colima ssh session kills the VM-side socat via SIGHUP
     [ -n "$SOCAT_COLIMA_SSH_PID" ] && kill "$SOCAT_COLIMA_SSH_PID" 2>/dev/null || true
+    rm -f "$CLAUDE_DIR_REAL/.notify-done"
 }
-trap cleanup_x11 EXIT
+trap cleanup EXIT
+
+# ---------------------------------------------------------------------------
+# Notification watcher: container touches ~/.claude/.notify-done → Mac says it
+# ---------------------------------------------------------------------------
+rm -f "$CLAUDE_DIR_REAL/.notify-done"
+(while true; do
+    if [ -f "$CLAUDE_DIR_REAL/.notify-done" ]; then
+        rm -f "$CLAUDE_DIR_REAL/.notify-done"
+        say "CLAUDE CODE DONE"
+    fi
+    sleep 1
+done) &
+NOTIFY_WATCHER_PID=$!
+echo "Notify: watcher active (say on task completion)"
 
 # Auto-detect XQuartz: DISPLAY set and pointing at a launchd socket
 if [[ "${DISPLAY:-}" == /private/tmp/* ]]; then
