@@ -12,6 +12,12 @@
 #   /w        — Samsung SSD /w (rsync'd working copies, read-write)
 #   /w-main   — ~/w (original git working copies, read-only reference)
 #   ~/.ssh    — SSH keys (read-only, for git push/pull)
+#
+# X11 forwarding (automatic when XQuartz is running):
+#   Chain: container → Colima VM socat (172.17.0.1:6000)
+#                    → Mac socat (port 6001)
+#                    → XQuartz Unix socket
+#   Requires: socat installed on Mac (brew install socat)
 
 set -euo pipefail
 
@@ -107,6 +113,57 @@ fi
 
 DOCKER_ARGS+=(-w "$WORKDIR")
 
-exec docker run "${DOCKER_ARGS[@]}" \
+# ---------------------------------------------------------------------------
+# X11 forwarding via two-hop socat chain (automatic when XQuartz is running)
+#
+# The chain:
+#   container (DISPLAY=172.17.0.1:0)
+#     → Colima VM socat  (172.17.0.1:6000 → host.lima.internal:6001)
+#     → Mac socat        (TCP:6001 → XQuartz Unix socket)
+#     → XQuartz
+# ---------------------------------------------------------------------------
+SOCAT_MAC_PID=""
+SOCAT_COLIMA_SSH_PID=""
+
+cleanup_x11() {
+    [ -n "$SOCAT_MAC_PID" ] && kill "$SOCAT_MAC_PID" 2>/dev/null || true
+    # Killing the colima ssh session kills the VM-side socat via SIGHUP
+    [ -n "$SOCAT_COLIMA_SSH_PID" ] && kill "$SOCAT_COLIMA_SSH_PID" 2>/dev/null || true
+}
+trap cleanup_x11 EXIT
+
+# Auto-detect XQuartz: DISPLAY set and pointing at a launchd socket
+if [[ "${DISPLAY:-}" == /private/tmp/* ]]; then
+    if ! command -v socat >/dev/null 2>&1; then
+        echo "X11: socat not found (brew install socat) — skipping X11 forwarding"
+    else
+        # Kill any stale socat from a previous run
+        pkill -f "socat.*TCP-LISTEN:6001" 2>/dev/null || true
+        sleep 0.2
+
+        # Mac socat: expose XQuartz Unix socket as TCP:6001
+        # Escape the colon in the launchd socket path (e.g. org.xquartz:0)
+        SOCK=$(printf '%s' "$DISPLAY" | sed 's/:/\\:/g')
+        socat TCP-LISTEN:6001,reuseaddr,fork "UNIX-CLIENT:$SOCK" &
+        SOCAT_MAC_PID=$!
+
+        # Colima VM socat: bridge docker0 (172.17.0.1:6000) → Mac:6001
+        # Runs in background via SSH; SSH exit kills the VM-side socat via SIGHUP
+        colima ssh -- \
+            sudo socat TCP-LISTEN:6000,bind=172.17.0.1,reuseaddr,fork \
+            TCP:host.lima.internal:6001 &
+        SOCAT_COLIMA_SSH_PID=$!
+
+        sleep 0.5
+        DOCKER_ARGS+=(-e "DISPLAY=172.17.0.1:0")
+        echo "X11: Forwarding XQuartz → container (DISPLAY=172.17.0.1:0)"
+        echo "X11: Run 'xhost +' in XQuartz terminal if windows don't appear"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Launch container (not exec so EXIT trap fires for X11 cleanup)
+# ---------------------------------------------------------------------------
+docker run "${DOCKER_ARGS[@]}" \
     "$IMAGE_NAME" \
     "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
