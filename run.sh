@@ -7,6 +7,7 @@
 #   /w/docker-w/run.sh --workdir /w/pasp       # start in a specific project
 #   /w/docker-w/run.sh --workdir /l/l420       # symlinks resolved automatically
 #   /w/docker-w/run.sh -p "build Intro420"     # non-interactive single prompt
+#   /w/docker-w/run.sh --logs                   # list stopped sessions + how to view logs
 #
 # Mounts:
 #   /w        — Samsung SSD /w (rsync'd working copies, read-write)
@@ -24,6 +25,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMAGE_NAME="claude-w"
 SSD="/Volumes/Samsung-990-Pro-4TB-2025/w"
+
+# Clean up stopped containers from previous sessions (preserves last session's logs)
+OLD_CONTAINERS=$(docker ps -a --filter "name=claude-w-" --filter "status=exited" -q 2>/dev/null)
+if [ -n "$OLD_CONTAINERS" ]; then
+    echo "Cleaning up $(echo "$OLD_CONTAINERS" | wc -l | tr -d ' ') old container(s)..."
+    docker rm $OLD_CONTAINERS >/dev/null
+fi
 
 # Build image if it doesn't exist
 if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
@@ -66,13 +74,22 @@ fi
 # Default working directory inside container
 WORKDIR="/w"
 
-# Parse --workdir if given
+# Parse arguments
 EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --workdir)
             WORKDIR="$2"
             shift 2
+            ;;
+        --logs)
+            echo "Stopped claude-w containers:"
+            docker ps -a --filter "name=claude-w-" --filter "status=exited" \
+                --format 'table {{.Names}}\t{{.Status}}\t{{.CreatedAt}}'
+            echo ""
+            echo "View logs:  docker logs <name>"
+            echo "Tail logs:  docker logs --tail 50 <name>"
+            exit 0
             ;;
         *)
             EXTRA_ARGS+=("$1")
@@ -92,7 +109,7 @@ fi
 #   /w      = SSD (rsync'd copies — the working area)
 #   /w-main = ~/w (read-only reference)
 DOCKER_ARGS=(
-    -it --rm
+    -it
     --name "$CONTAINER_NAME"
     -v "$SSD:/w"
     -v "$W_REAL:/w-main:ro"
