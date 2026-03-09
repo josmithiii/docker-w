@@ -93,6 +93,7 @@ fi
 #   /w-main = ~/w (read-only reference)
 DOCKER_ARGS=(
     -it --rm
+    --name "$CONTAINER_NAME"
     -v "$SSD:/w"
     -v "$W_REAL:/w-main:ro"
     -v "$CLAUDE_DIR_REAL:/home/claude/.claude"
@@ -125,8 +126,11 @@ DOCKER_ARGS+=(-w "$WORKDIR")
 SOCAT_MAC_PID=""
 SOCAT_COLIMA_SSH_PID=""
 NOTIFY_WATCHER_PID=""
+CONTAINER_NAME="claude-w-$(basename "$WORKDIR")-$$"
 
 cleanup() {
+    # Stop the Docker container (handles terminal close / SIGHUP)
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
     [ -n "$NOTIFY_WATCHER_PID" ] && kill "$NOTIFY_WATCHER_PID" 2>/dev/null || true
     [ -n "$SOCAT_MAC_PID" ] && kill "$SOCAT_MAC_PID" 2>/dev/null || true
     # Killing the colima ssh session kills the VM-side socat via SIGHUP
