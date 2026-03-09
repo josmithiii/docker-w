@@ -105,6 +105,8 @@ if [[ "$WORKDIR_REAL" == "$W_REAL"* ]]; then
     WORKDIR="/w${WORKDIR_REAL#$W_REAL}"
 fi
 
+CONTAINER_NAME="claude-w-$(basename "$WORKDIR")-$$"
+
 # Build docker run args
 #   /w      = SSD (rsync'd copies — the working area)
 #   /w-main = ~/w (read-only reference)
@@ -143,27 +145,28 @@ DOCKER_ARGS+=(-w "$WORKDIR")
 SOCAT_MAC_PID=""
 SOCAT_COLIMA_SSH_PID=""
 NOTIFY_WATCHER_PID=""
-CONTAINER_NAME="claude-w-$(basename "$WORKDIR")-$$"
 
 cleanup() {
     # Stop the Docker container (handles terminal close / SIGHUP)
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    # Give watcher time to detect .notify-done before killing it
+    sleep 2
     [ -n "$NOTIFY_WATCHER_PID" ] && kill "$NOTIFY_WATCHER_PID" 2>/dev/null || true
     [ -n "$SOCAT_MAC_PID" ] && kill "$SOCAT_MAC_PID" 2>/dev/null || true
     # Killing the colima ssh session kills the VM-side socat via SIGHUP
     [ -n "$SOCAT_COLIMA_SSH_PID" ] && kill "$SOCAT_COLIMA_SSH_PID" 2>/dev/null || true
-    rm -f "$CLAUDE_DIR_REAL/.notify-done"
+    rm -f "$CLAUDE_DIR_REAL/.notify-done-docker"
 }
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
-# Notification watcher: container touches ~/.claude/.notify-done → Mac says it
+# Notification watcher: container touches ~/.claude/.notify-done-docker → Mac says it
 # ---------------------------------------------------------------------------
-rm -f "$CLAUDE_DIR_REAL/.notify-done"
+rm -f "$CLAUDE_DIR_REAL/.notify-done-docker"
 (while true; do
-    if [ -f "$CLAUDE_DIR_REAL/.notify-done" ]; then
-        rm -f "$CLAUDE_DIR_REAL/.notify-done"
-        say "CLAUDE CODE DONE"
+    if [ -f "$CLAUDE_DIR_REAL/.notify-done-docker" ]; then
+        rm -f "$CLAUDE_DIR_REAL/.notify-done-docker"
+        say "CLAUDE CODE DOCKER DONE"
     fi
     sleep 1
 done) &
