@@ -9,4 +9,4 @@ if [ -L "$PWD/Makefile.lecture" ]; then
     fi
 fi
 
-exec claude --dangerously-skip-permissions "$@"
+exec claude ${CLAUDE_CONTINUE_FLAG:-} --dangerously-skip-permissions "$@"

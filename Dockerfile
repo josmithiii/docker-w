@@ -69,9 +69,14 @@ RUN useradd -m -s /bin/bash claude \
 RUN mkdir -p /w /ssd && chown claude:claude /w /ssd
 
 # ============================================================================
-# Claude Code
+# Claude Code (optionally pin version with --build-arg CC_VERSION=2.1.12)
 # ============================================================================
-RUN npm install -g @anthropic-ai/claude-code
+ARG CC_VERSION=""
+RUN if [ -n "$CC_VERSION" ]; then \
+        npm install -g @anthropic-ai/claude-code@$CC_VERSION; \
+    else \
+        npm install -g @anthropic-ai/claude-code; \
+    fi
 
 USER claude
 WORKDIR /w

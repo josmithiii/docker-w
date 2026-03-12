@@ -7,6 +7,9 @@
 #   /w/docker-w/run.sh --workdir /w/pasp       # start in a specific project
 #   /w/docker-w/run.sh --workdir /l/l420       # symlinks resolved automatically
 #   /w/docker-w/run.sh -p "build Intro420"     # non-interactive single prompt
+#   /w/docker-w/run.sh --continue               # resume previous conversation
+#   /w/docker-w/run.sh --memory 8g              # set container memory limit
+#   /w/docker-w/run.sh --rebuild --cc-version 2.1.12  # pin Claude Code version
 #   /w/docker-w/run.sh --logs                   # list stopped sessions + how to view logs
 #
 # Mounts:
@@ -25,18 +28,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMAGE_NAME="claude-w"
 SSD="/Volumes/Samsung-990-Pro-4TB-2025/w"
+CONTINUE_FLAG=""
+MEMORY_LIMIT=""
+CC_VERSION=""
+FORCE_REBUILD=false
 
 # Clean up stopped containers from previous sessions (preserves last session's logs)
 OLD_CONTAINERS=$(docker ps -a --filter "name=claude-w-" --filter "status=exited" -q 2>/dev/null)
 if [ -n "$OLD_CONTAINERS" ]; then
     echo "Cleaning up $(echo "$OLD_CONTAINERS" | wc -l | tr -d ' ') old container(s)..."
     docker rm $OLD_CONTAINERS >/dev/null
-fi
-
-# Build image if it doesn't exist
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-    echo "Building Docker image '$IMAGE_NAME'..."
-    docker build -t "$IMAGE_NAME" "$SCRIPT_DIR"
 fi
 
 # Extract OAuth token from macOS Keychain (Claude Max subscription)
@@ -82,6 +83,22 @@ while [[ $# -gt 0 ]]; do
             WORKDIR="$2"
             shift 2
             ;;
+        --continue)
+            CONTINUE_FLAG="--continue"
+            shift
+            ;;
+        --memory)
+            MEMORY_LIMIT="$2"
+            shift 2
+            ;;
+        --cc-version)
+            CC_VERSION="$2"
+            shift 2
+            ;;
+        --rebuild)
+            FORCE_REBUILD=true
+            shift
+            ;;
         --logs)
             echo "Stopped claude-w containers:"
             docker ps -a --filter "name=claude-w-" --filter "status=exited" \
@@ -97,6 +114,24 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Build image if needed (after arg parsing so --rebuild and --cc-version are available)
+NEED_BUILD=false
+if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+    NEED_BUILD=true
+fi
+if [ "$FORCE_REBUILD" = true ]; then
+    NEED_BUILD=true
+fi
+if [ "$NEED_BUILD" = true ]; then
+    echo "Building Docker image '$IMAGE_NAME'..."
+    BUILD_ARGS=()
+    if [ -n "$CC_VERSION" ]; then
+        echo "  Claude Code version: $CC_VERSION"
+        BUILD_ARGS+=(--build-arg "CC_VERSION=$CC_VERSION")
+    fi
+    docker build "${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}" -t "$IMAGE_NAME" "$SCRIPT_DIR"
+fi
 
 # Resolve workdir: if it's a symlinked path like /l/l420, map it into /w/
 # e.g. /l/l420 -> /Users/jos/w/lectures420 -> /w/lectures420
@@ -132,6 +167,15 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
 fi
 
 DOCKER_ARGS+=(-w "$WORKDIR")
+
+# Container memory limit
+if [ -n "$MEMORY_LIMIT" ]; then
+    DOCKER_ARGS+=(--memory "$MEMORY_LIMIT")
+    echo "Memory: limit set to $MEMORY_LIMIT"
+fi
+
+# Let container reach host services (e.g. local LLM, Docker Model Runner)
+DOCKER_ARGS+=(--add-host=host.docker.internal:host-gateway)
 
 # ---------------------------------------------------------------------------
 # X11 forwarding via two-hop socat chain (automatic when XQuartz is running)
@@ -205,6 +249,11 @@ fi
 # ---------------------------------------------------------------------------
 # Launch container (not exec so EXIT trap fires for X11 cleanup)
 # ---------------------------------------------------------------------------
+# Pass --continue flag to claude via environment variable
+if [ -n "$CONTINUE_FLAG" ]; then
+    DOCKER_ARGS+=(-e "CLAUDE_CONTINUE_FLAG=--continue")
+fi
+
 docker run "${DOCKER_ARGS[@]}" \
     "$IMAGE_NAME" \
     "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"
