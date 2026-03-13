@@ -22,6 +22,18 @@ docker build -t claude-w /w/docker-w/
 
 # Non-interactive single prompt
 /w/docker-w/run.sh -p "build the Intro420 lecture"
+
+# Resume previous conversation
+/w/docker-w/run.sh --continue
+
+# Limit container memory (prevents OOM-killing the VM)
+/w/docker-w/run.sh --memory 8g
+
+# Force rebuild the Docker image
+/w/docker-w/run.sh --rebuild
+
+# Pin a specific Claude Code version (requires rebuild)
+/w/docker-w/run.sh --rebuild --cc-version 2.1.12
 ```
 
 ## Prerequisites
@@ -66,6 +78,7 @@ rsync -a ~/w/pasp/ /Volumes/Samsung-990-Pro-4TB-2025/w/pasp/
 | `/home/claude/.claude` | `~/.claude` | read-write | Claude Code settings, memory, history |
 | `/home/claude/.claude.json` | `~/.claude.json` | read-write | Claude Code config/state |
 | `/home/claude/.gitconfig` | `~/.gitconfig` | **read-only** | Git user.name/email for commits |
+| `/home/claude/.ssh` | `~/.ssh` | **read-only** | SSH keys for git push/pull |
 
 Symlinked host paths (e.g. `/l/l420` -> `~/w/lectures420`) are resolved
 automatically and mapped into `/w/...` inside the container.
@@ -73,14 +86,16 @@ automatically and mapped into `/w/...` inside the container.
 ## Sandboxing
 
 **What's contained:**
-- Can't access your home directory, SSH keys, browser data, or anything outside the mounts
+- Can't access your home directory, browser data, or anything outside the mounts
 - If it runs `rm -rf /`, only container internals are destroyed
 
 **What's exposed (read-write):**
 - `/w` (SSD) -- untracked files could be deleted, but these are rsync'd copies; originals in `~/w` are safe (mounted read-only as `/w-main`)
 - `~/.claude`, `~/.claude.json` -- conversation history, settings could be corrupted
 
-**Network:** unrestricted. Could `git push` (HTTPS only -- no SSH keys mounted) or curl arbitrary URLs.
+**Network:** unrestricted. Could `git push` (HTTPS or SSH) or curl arbitrary URLs.
+The container can reach host services via `host.docker.internal`
+(e.g. a local LLM or Docker Model Runner).
 
 **Mitigations:**
 - Mount `~/.claude` read-only: add `:ro` to the volume flags in `run.sh`
@@ -99,7 +114,7 @@ Fallback: set `ANTHROPIC_API_KEY` in your environment to use an API key instead.
 **Pre-installed (persistent):** add to the `apt-get install` list in `Dockerfile`, then rebuild:
 
 ```bash
-docker build -t claude-w /w/docker-w/
+/w/docker-w/run.sh --rebuild
 ```
 
 Docker caches unchanged layers, so rebuilds only re-run from the changed line onward.
@@ -115,6 +130,37 @@ These disappear when the container exits -- useful for one-off experiments.
 
 **Rule of thumb:** packages you always want go in the Dockerfile;
 everything else can be installed at runtime as needed.
+
+## Command-line flags
+
+| Flag | Description |
+|------|-------------|
+| `--workdir PATH` | Start in a specific project directory |
+| `--continue` | Resume previous conversation |
+| `--memory SIZE` | Set container memory limit (e.g. `8g`) |
+| `--rebuild` | Force rebuild the Docker image |
+| `--cc-version VER` | Pin Claude Code version (requires `--rebuild`) |
+| `--logs` | List stopped sessions and how to view their logs |
+| `-p "prompt"` | Non-interactive single prompt (passed through to Claude) |
+
+## Notifications
+
+When a task completes, the container can touch `~/.claude/.notify-done-docker`
+and the host watcher will run `say "CLAUDE CODE DOCKER DONE"`.
+The watcher starts automatically with each `run.sh` session.
+
+## X11 forwarding
+
+Automatic when XQuartz is running. Uses a two-hop socat chain:
+
+```
+container (DISPLAY=172.17.0.1:0)
+  -> Colima VM socat (172.17.0.1:6000 -> host.lima.internal:6001)
+  -> Mac socat (TCP:6001 -> XQuartz Unix socket)
+```
+
+Requires `socat` on the Mac (`brew install socat`).
+Run `xhost +` in an XQuartz terminal if windows don't appear.
 
 ## References
 
